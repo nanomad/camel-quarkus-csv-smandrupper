@@ -17,6 +17,9 @@ import java.util.Map;
 
 @Singleton
 public class QuarkusCsvSmandrupper extends RouteBuilder {
+
+    private static final int PRODUCTS_PER_OUTPUT_FILE = 50;
+
     @Override
     public void configure() throws Exception {
         CsvDataFormat csv = new CsvDataFormat()
@@ -25,11 +28,11 @@ public class QuarkusCsvSmandrupper extends RouteBuilder {
                 .setUseOrderedMaps(true)
                 .setDelimiter(';');
 
-        from("file://temp?include=.*\\.csv")
+        from("file://data?include=.*\\.csv")
                 .log("Received file: ${file:name}")
                 .streamCaching()
                 .unmarshal(csv)
-                .split(SimpleExpressionBuilder.collateExpression("${body}", 50)).streaming().aggregationStrategy(AggregationStrategies.useOriginal())
+                .split(SimpleExpressionBuilder.collateExpression("${body}", PRODUCTS_PER_OUTPUT_FILE)).streaming().aggregationStrategy(AggregationStrategies.useOriginal())
                     .to("direct:process-bucket")
                 .end()
                 .log("Completed processing file: ${file:name}");
@@ -47,11 +50,12 @@ public class QuarkusCsvSmandrupper extends RouteBuilder {
                     List<String> header = x.getMessage().getHeader(CsvConstants.HEADER_RECORD, List.class);
                     Map<String, Object> headerAsMap = new LinkedHashMap<>(header.size());
                     header.forEach(e -> headerAsMap.put(e, e));
+                    headerAsMap.put("total", "total");
                     List<Map<String, Object>> rows = x.getMessage().getBody(List.class);
                     rows.add(0, headerAsMap);
                 })
                 .marshal(csv)
-                .to("file://temp/out")
+                .to("file://data/out")
                 .log("Generated ${header.CamelFileName}");
     }
 }
